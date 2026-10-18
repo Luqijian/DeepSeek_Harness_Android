@@ -91,6 +91,8 @@ rm -f "$R/etc/resolv.conf"
     echo "nameserver 1.1.1.1"
     echo "nameserver 8.8.8.8"
 } > "$R/etc/resolv.conf"
+mkdir -p "$R/tmp" "$R/var/tmp"
+chmod 1777 "$R/tmp" "$R/var/tmp"
 
 installed=0
 
