@@ -139,11 +139,25 @@ fi
 
 echo "==> 6/7 Clean caches and package rootfs"
 R="$OUT/stage/rootfs"
-rm -f "$R/root/install-rootfs.sh"
-rm -rf "$R/root/.npm" "$R/root/.cache" "$R/var/lib/apt/lists"/* "$R/var/cache/apt"/* "$R/var/log"/*
-rm -rf "$R/usr/share/doc"/* "$R/usr/share/man"/*
-find "$R/usr/share/locale" -mindepth 1 -maxdepth 1 ! -name 'en*' ! -name 'C*' -exec rm -rf {} + 2>/dev/null || true
-tar -czf "$OUT/rootfs.tar.gz" -C "$R" .
+if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+    echo "    cleaning and packing in docker (root-owned files)"
+    docker run --rm -v "$R:/rootfs" -v "$OUT:/out" debian:$DEBIAN_TAG bash -c '
+        rm -f /rootfs/root/install-rootfs.sh
+        rm -rf /rootfs/root/.npm /rootfs/root/.cache
+        rm -rf /rootfs/var/lib/apt/lists/* /rootfs/var/cache/apt/* /rootfs/var/log/*
+        rm -rf /rootfs/usr/share/doc/* /rootfs/usr/share/man/*
+        find /rootfs/usr/share/locale -mindepth 1 -maxdepth 1 ! -name "en*" ! -name "C*" -exec rm -rf {} + 2>/dev/null || true
+        tar -czf /out/rootfs.tar.gz -C /rootfs .
+        chmod 644 /out/rootfs.tar.gz
+    '
+else
+    if [ "$(id -u)" -eq 0 ]; then SUDO=""; else SUDO="sudo"; fi
+    $SUDO rm -f "$R/root/install-rootfs.sh"
+    $SUDO rm -rf "$R/root/.npm" "$R/root/.cache" "$R/var/lib/apt/lists"/* "$R/var/cache/apt"/* "$R/var/log"/*
+    $SUDO rm -rf "$R/usr/share/doc"/* "$R/usr/share/man"/*
+    $SUDO find "$R/usr/share/locale" -mindepth 1 -maxdepth 1 ! -name 'en*' ! -name 'C*' -exec rm -rf {} + 2>/dev/null || true
+    $SUDO tar -czf "$OUT/rootfs.tar.gz" -C "$R" .
+fi
 
 echo "==> 7/7 proot host binaries from Termux (16 KB aligned)"
 for spec in "pool/main/p/proot/proot_${PROOT_VER}_aarch64.deb" \
