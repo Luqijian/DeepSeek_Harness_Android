@@ -82,44 +82,35 @@ curl -fsSL -o "$OUT/stage/node.tar.xz" "https://nodejs.org/dist/v$NODE_VERSION/n
 tar -xJf "$OUT/stage/node.tar.xz" -C "$OUT/stage/rootfs/usr/local" --strip-components=1
 
 echo "==> 5/7 Install @deepseek-ai/dsh@$DSH_VERSION and dedupe nested zod copies"
-chroot "$OUT/stage/rootfs" /usr/bin/env -i \
-    PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-    TMPDIR=/tmp HOME=/root bash --noprofile --norc -c '
-set -e
-export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq
-apt-get install -yqq --no-install-recommends ca-certificates curl xz-utils git ripgrep bash python3 \
-    make g++ build-essential procps openssh-client unzip ncurses-base ncurses-bin tzdata jq >/dev/null
-dpkg --configure -a >/dev/null || true
-npm install -g "@deepseek-ai/dsh@'"$DSH_VERSION"'" --foreground-scripts --no-audit --no-fund >/dev/null
-npm install -g pnpm@10 --no-audit --no-fund >/dev/null
-python3 - <<"PY2"
-import collections, json, os, shutil
-root = "/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules"
-topdir = os.path.join(root, "zod")
-top = json.load(open(os.path.join(topdir, "package.json")))["version"]
-groups = collections.defaultdict(list)
-for dp, dn, fn in os.walk(root):
-    if os.path.basename(dp) == "zod" and os.path.basename(os.path.dirname(dp)) == "node_modules" and dp != topdir:
-        pj = os.path.join(dp, "package.json")
-        if os.path.isfile(pj) and not os.path.islink(dp):
-            groups[json.load(open(pj))["version"]].append(dp)
-for ver, dirs in groups.items():
-    if ver == top or not dirs:
-        continue
-    shared = os.path.join(root, ".shared", "zod-" + ver)
-    os.makedirs(os.path.dirname(shared), exist_ok=True)
-    if not os.path.isdir(shared):
-        shutil.copytree(dirs[0], shared, symlinks=True)
-    for d in dirs:
-        shutil.rmtree(d, ignore_errors=True)
-        os.symlink(shared, d)
-    print(f"    deduped {len(dirs)} zod@{ver} copies")
-PY2
-' || { echo "chroot failed - falling back to proot on the host"; exit 1; }
+R="$OUT/stage/rootfs"
+cp "$ROOT/runtime/install-rootfs.sh" "$R/root/install-rootfs.sh"
+chmod +x "$R/root/install-rootfs.sh"
+
+install_env=(
+  /usr/bin/env -i
+  PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+  TMPDIR=/tmp HOME=/root DSH_VERSION="$DSH_VERSION"
+  /bin/bash /root/install-rootfs.sh
+)
+
+if chroot "$R" /bin/true >/dev/null 2>&1; then
+    echo "    using chroot"
+    chroot "$R" "${install_env[@]}"
+else
+    echo "    chroot unavailable (GitHub runner); using host proot"
+    if ! command -v proot >/dev/null 2>&1; then
+        if [ "$(id -u)" -eq 0 ]; then
+            apt-get update -qq && apt-get install -yqq proot
+        else
+            sudo apt-get update -qq && sudo apt-get install -yqq proot
+        fi
+    fi
+    PROOT_NO_SECCOMP=1 proot -0 -r "$R" -b /dev -b /proc -b /sys -b /etc/resolv.conf -w /root "${install_env[@]}"
+fi
 
 echo "==> 6/7 Clean caches and package rootfs"
 R="$OUT/stage/rootfs"
+rm -f "$R/root/install-rootfs.sh"
 rm -rf "$R/root/.npm" "$R/root/.cache" "$R/var/lib/apt/lists"/* "$R/var/cache/apt"/* "$R/var/log"/*
 rm -rf "$R/usr/share/doc"/* "$R/usr/share/man"/*
 find "$R/usr/share/locale" -mindepth 1 -maxdepth 1 ! -name 'en*' ! -name 'C*' -exec rm -rf {} + 2>/dev/null || true

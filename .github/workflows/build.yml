@@ -4,6 +4,10 @@ on:
   push:
     branches: ["**"]
     tags: ["v*"]
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
+      - "LICENSE"
   pull_request:
   workflow_dispatch:
 
@@ -24,7 +28,7 @@ jobs:
       - name: Build runtime
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -yqq curl xz-utils tar gzip python3
+          sudo apt-get install -yqq curl xz-utils tar gzip python3 proot
           bash runtime/build-runtime.sh
 
       - name: Verify 16 KB ELF alignment (proot binaries)
@@ -32,7 +36,7 @@ jobs:
           python3 - <<'PY'
           import glob, struct, sys
           bad = []
-          for path in glob.glob('runtime/out/jniLibs/arm64-v8a/*.so'):
+          for path in glob.glob('runtime/out/jniLibs/*/*.so'):
               data = open(path, 'rb').read()
               assert data[:4] == b'\x7fELF', path
               e_phoff = struct.unpack_from('<Q', data, 0x20)[0]
@@ -53,10 +57,11 @@ jobs:
         with:
           name: runtime
           retention-days: 3
+          if-no-files-found: error
           path: |
             runtime/out/rootfs.tar.gz
             runtime/out/manifest.json
-            runtime/out/jniLibs/arm64-v8a/*.so
+            runtime/out/jniLibs
 
   apk:
     name: Build APK
@@ -70,6 +75,15 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 36
+        run: |
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+
       - uses: actions/download-artifact@v4
         with:
           name: runtime
@@ -77,35 +91,40 @@ jobs:
 
       - name: Place runtime into the app
         run: |
+          ROOTFS=$(find runtime-out -name rootfs.tar.gz | head -1)
+          MANIFEST=$(find runtime-out -name manifest.json | head -1)
+          test -n "$ROOTFS" && test -n "$MANIFEST"
           mkdir -p app/src/main/assets/runtime app/src/main/jniLibs/arm64-v8a
-          cp runtime-out/rootfs.tar.gz app/src/main/assets/runtime/rootfs.bin
-          cp runtime-out/manifest.json app/src/main/assets/runtime/manifest.json
-          cp runtime-out/lib/arm64-v8a/*.so app/src/main/jniLibs/arm64-v8a/ || \
-            find runtime-out -name 'lib*.so' -exec cp {} app/src/main/jniLibs/arm64-v8a/ \;
+          cp "$ROOTFS" app/src/main/assets/runtime/rootfs.bin
+          cp "$MANIFEST" app/src/main/assets/runtime/manifest.json
+          find runtime-out -name 'lib*.so' -exec cp {} app/src/main/jniLibs/arm64-v8a/ \;
           ls -lh app/src/main/assets/runtime app/src/main/jniLibs/arm64-v8a
 
-      - uses: gradle/actions/setup-gradle@v4
-
       - name: Assemble debug APK
+        env:
+          VERSION_CODE: ${{ github.run_number }}
         run: ./gradlew :app:assembleDebug --no-daemon
 
       - name: Decode release keystore
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           if [ -n "$KEYSTORE_BASE64" ]; then
             echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
-            cat > local.properties <<PROPS
-          release.storeFile=$RUNNER_TEMP/release.keystore
-          release.storePassword=${{ secrets.KEYSTORE_PASSWORD }}
-          release.keyAlias=${{ secrets.KEY_ALIAS }}
-          release.keyPassword=${{ secrets.KEY_PASSWORD }}
-          PROPS
+            {
+              echo "release.storeFile=$RUNNER_TEMP/release.keystore"
+              echo "release.storePassword=$KEYSTORE_PASSWORD"
+              echo "release.keyAlias=$KEY_ALIAS"
+              echo "release.keyPassword=$KEY_PASSWORD"
+            } > local.properties
           fi
 
       - name: Assemble release APK
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
         env:
           VERSION_CODE: ${{ github.run_number }}
         run: ./gradlew :app:assembleRelease --no-daemon
@@ -116,11 +135,13 @@ jobs:
           cp app/build/outputs/apk/debug/app-debug.apk dist/harness-android-debug.apk
           if [ -f app/build/outputs/apk/release/app-release.apk ]; then
             cp app/build/outputs/apk/release/app-release.apk dist/harness-android.apk
-            ( cd dist && sha256sum *.apk > SHA256SUMS )
-            VERSION_CODE="${{ github.run_number }}"
+            sha256sum dist/harness-android.apk > dist/SHA256SUMS
+            cp "$(find runtime-out -name manifest.json | head -1)" dist/runtime-manifest.json
+            APP_VERSION=$(grep -oP '^appVersionName=\K.*' gradle.properties)
+            DSH_VERSION=$(grep -oP '^dshVersion=\K.*' gradle.properties)
             APK_SHA=$(sha256sum dist/harness-android.apk | cut -d' ' -f1)
-            printf '{\n  "versionName": "%s",\n  "versionCode": %s,\n  "apk": "harness-android.apk",\n  "apkSha256": "%s"\n}\n' \
-              "$(grep -oP '^appVersionName=\K.*' gradle.properties)" "$VERSION_CODE" "$APK_SHA" \
+            printf '{\n  "versionName": "%s+dsh%s",\n  "versionCode": %s,\n  "dshVersion": "%s",\n  "apk": "harness-android.apk",\n  "apkSha256": "%s"\n}\n' \
+              "$APP_VERSION" "$DSH_VERSION" "${{ github.run_number }}" "$DSH_VERSION" "$APK_SHA" \
               > dist/update.json
           fi
           ls -lh dist
@@ -128,12 +149,44 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: apk
+          retention-days: 3
+          if-no-files-found: error
           path: dist/
 
-      - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
+  release:
+    name: Publish GitHub Release
+    needs: apk
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: apk
+          path: dist
+
+      - name: Create release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/* --generate-notes --title "$GITHUB_REF_NAME" || \
-          gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          APP_VERSION=$(grep -oP '^appVersionName=\K.*' gradle.properties)
+          DSH_VERSION=$(grep -oP '^dshVersion=\K.*' gradle.properties)
+          TAG="v${APP_VERSION}-dsh${DSH_VERSION}-${{ github.run_number }}"
+          test -f dist/harness-android.apk
+          test -f dist/update.json
+          mkdir -p release-assets
+          cp dist/harness-android.apk dist/update.json dist/SHA256SUMS dist/runtime-manifest.json release-assets/
+          NOTES="Harness Android ${APP_VERSION}, bundled @deepseek-ai/dsh ${DSH_VERSION}.
+
+          Install harness-android.apk. Existing installations can use Settings → Check for updates for this release."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" release-assets/* --clobber
+          else
+            gh release create "$TAG" release-assets/* \
+              --title "$TAG" \
+              --notes "$NOTES" \
+              --latest \
+              --target "$GITHUB_SHA"
+          fi
+          gh release view "$TAG" --json url,assets

@@ -97,10 +97,12 @@ export VERSION_CODE=1024          # 单调递增
 
 ### `build.yml`
 
-- `runtime` job（`ubuntu-24.04-arm`）：执行运行时构建，校验所有 `jniLibs/*.so` 的 `LOAD` 段 `p_align ≥ 0x4000`（16 KB）；
-- `apk` job：下载运行时产物，放入 App，构建 debug APK；`v*` tag 时构建 release APK；
-- 打 tag 后创建 GitHub Release，附带 APK、`SHA256SUMS`、`update.json`（供应用内更新）；
-- 所有分支/PR 都会构建，便于验证。
+- `runtime` job（`ubuntu-24.04-arm`）：执行运行时构建，校验所有 `jniLibs/*.so` 的 `LOAD` 段 `p_align ≥ 0x4000`（16 KB）。GitHub runner 不允许 `chroot`，脚本会自动改用宿主 `proot` 在 rootfs 内执行 apt/npm；
+- `apk` job：下载运行时产物，放入 App，构建 debug APK；main 分支和 `v*` tag 会同时构建 release APK（使用 Secrets 中的固定 keystore 签名）；
+- `release` job：**每次 main 分支构建成功后自动创建 GitHub Release**，tag 形如 `v0.1.0-dsh0.2.1-rc.2-<run>`，附带 release APK、`SHA256SUMS`、`runtime-manifest.json`、`update.json`（供应用内更新）；`--latest` 保证应用内“检查更新”能读到；
+- 所有分支/PR 都会构建，便于验证；release job 只在 main push / 手动触发时运行。
+
+签名 Secrets：`KEYSTORE_BASE64`、`KEYSTORE_PASSWORD`、`KEY_ALIAS`、`KEY_PASSWORD`。keystore 必须长期保存；丢失后新 APK 无法覆盖安装旧版本。
 
 ### `upstream-sync.yml`
 

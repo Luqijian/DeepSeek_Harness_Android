@@ -36,7 +36,7 @@ Harness Android 不是对 DeepSeek Harness 的重写，也不是一个"远程网
 - **本地文件夹即工作区** — 通过系统授权打开 `/storage/emulated/0` 下任意目录，proot 直接 bind 到 `/workspaces/default`，AI 的修改实时写回原目录，不复制、不同步。
 - **真实终端** — Node-pty 在 Debian 内工作，`bash`、`git`、`rg`、`node`、`npm`/`pnpm` 可直接使用；已处理 Android 的目录所有权与 `core.fileMode` 差异。
 - **离线可用** — Debian rootfs、Node 24、官方 dsh 与常见工具链全部打包进 APK；首次启动解压约 1.2 GB，之后无需联网下载运行时。
-- **自动跟随上游** — 每日 CI 检查 npm `latest`，自动升级 `dshVersion` 并开 PR；合并后自动构建、签名、发布。应用内"检查更新"直接读取 GitHub Releases 的 `update.json`。
+- **自动跟随上游** — 每日 CI 检查 npm `latest`，自动升级 `dshVersion` 并开 PR；合并后自动构建、签名、发布。**每次 main 构建成功都会自动创建 Release**，应用内"检查更新"直接读取 GitHub Releases 的 `update.json`。
 - **无标题栏悬浮球** — 十字球展开工作区/刷新/设置，可全屏拖动、吸附侧边成半透明半球；不再占用屏幕空间。
 - **后台常驻** — specialUse 前台服务 + WakeLock，息屏后引擎继续运行，通知栏可停止/重启。
 - **账号登录可用** — 官方登录流程使用 `window.open()`，已通过多窗口 + 子 WebView 支持，手机号/验证码登录页可正常显示。

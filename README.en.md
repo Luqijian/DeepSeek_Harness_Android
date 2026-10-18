@@ -36,7 +36,7 @@ The official UI, sessions, file panel, terminal, plugins, and automation all com
 - **Open any local folder as a workspace** — pick a directory under `/storage/emulated/0`; proot binds it to `/workspaces/default`, so AI edits land in the original folder live. No copy, no sync.
 - **Real terminal** — Node-pty runs inside Debian; `bash`, `git`, `rg`, `node`, `npm`/`pnpm` work. Android ownership/`core.fileMode` quirks are handled.
 - **Works offline** — Debian rootfs, Node 24, official dsh, and common tooling are bundled. First launch extracts ~1.2 GB; no runtime downloads afterwards.
-- **Follows upstream automatically** — a daily CI job watches npm `latest`, bumps `dshVersion`, and opens a PR. Merging builds, signs, and publishes a release. The in-app updater reads `update.json` from GitHub Releases.
+- **Follows upstream automatically** — a daily CI job watches npm `latest`, bumps `dshVersion`, and opens a PR. **Every successful main build publishes a signed GitHub Release automatically**; the in-app updater reads `update.json` from the latest release.
 - **Toolbar-free floating ball** — a plus ball expands to workspace/reload/settings; drag it anywhere or dock it as a translucent half-sphere at a screen edge.
 - **Background operation** — a `specialUse` foreground service plus WakeLock keeps the engine alive with the screen off; the notification can stop or restart it.
 - **Account login works** — the official login flow uses `window.open()`; multi-window plus a child WebView makes the phone/verification-code login page render correctly.
