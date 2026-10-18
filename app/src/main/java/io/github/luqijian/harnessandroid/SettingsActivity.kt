@@ -53,7 +53,7 @@ class SettingsActivity : AppCompatActivity() {
         binding.shareLogs.setOnClickListener { shareLogs() }
         binding.reportIssue.setOnClickListener { openUrl("https://github.com/${BuildConfig.GITHUB_REPO}/issues") }
         binding.licenseLink.setOnClickListener {
-            openUrl("https://github.com/${BuildConfig.GITHUB_REPO}/blob/main/docs/LICENSES.md")
+            openUrl("https://github.com/${BuildConfig.GITHUB_REPO}/blob/main/THIRD_PARTY_NOTICES.md")
         }
         binding.privacyLink.setOnClickListener {
             openUrl("https://github.com/${BuildConfig.GITHUB_REPO}/blob/main/docs/PRIVACY.md")

@@ -86,5 +86,5 @@
     <string name="workspace_required">请先选择一个工作区。</string>
     <string name="mirror_space">镜像占用：%1$s</string>
     <string name="workspace_removed">工作区已移除</string>
-    <string name="direct_mode_note">Dev 版直接绑定原始文件夹；/sdcard 不支持 chmod、符号链接和 hardlink，npm/git 的部分操作可能受限。需要完整 POSIX 时请改用“本地镜像同步”。</string>
+    <string name="direct_mode_note">Dev 版直接绑定原始文件夹；/sdcard 不支持 chmod、符号链接和 hardlink，npm/git 的部分操作可能受限。需要完整 POSIX 时，可在终端把项目复制到 /root 下操作（不会回写 /sdcard）。</string>
 </resources>
