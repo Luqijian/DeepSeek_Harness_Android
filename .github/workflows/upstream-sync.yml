@@ -1,0 +1,66 @@
+name: upstream-sync
+
+# Track official @deepseek-ai/dsh releases on npm. When a new version is
+# published, bump the pin, rebuild the runtime + APK, and open a PR. Merging
+# the PR produces a new signed release that in-app updaters pick up.
+on:
+  schedule:
+    - cron: "0 21 * * *" # daily 05:00 Asia/Shanghai
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: npm dist-tag to track
+        default: latest
+        type: choice
+        options: [latest, next, alpha]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      changed: ${{ steps.check.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: check
+        env:
+          CHANNEL: ${{ inputs.channel || 'latest' }}
+        run: |
+          CURRENT=$(grep -oP '^dshVersion=\K.*' gradle.properties)
+          LATEST=$(curl -fsSL "https://registry.npmjs.org/@deepseek-ai%2Fdsh" | \
+            python3 -c "import json,sys; d=json.load(sys.stdin); print(d['dist-tags']['$CHANNEL'])")
+          echo "current=$CURRENT latest=$LATEST"
+          if [ "$CURRENT" = "$LATEST" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            sed -i "s/^dshVersion=.*/dshVersion=$LATEST/" gradle.properties
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "version=$LATEST" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Smoke-check runtime build with the new pin
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -yqq curl xz-utils python3
+          bash runtime/build-runtime.sh
+
+      - name: Create update PR
+        if: steps.check.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="upstream/dsh-${{ steps.check.outputs.version }}"
+          git config user.name "upstream-sync-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add gradle.properties
+          git commit -m "chore: track upstream dsh ${{ steps.check.outputs.version }}"
+          git push origin "$BRANCH"
+          gh pr create --title "Upstream dsh ${{ steps.check.outputs.version }}" \
+            --body "Official \`@deepseek-ai/dsh@${{ steps.check.outputs.version }}\` published on npm. Runtime smoke build passed in CI. Merge to produce a new app release." \
+            --head "$BRANCH"

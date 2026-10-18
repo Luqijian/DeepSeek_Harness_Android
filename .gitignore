@@ -1,0 +1,20 @@
+.gradle/
+build/
+*/build/
+local.properties
+.idea/
+*.iml
+*.apk
+*.aab
+*.keystore
+*.jks
+app/src/main/assets/rootfs.tar.*
+app/src/main/assets/runtime-manifest.json
+.gradle-cache/
+captures/
+.DS_Store
+Thumbs.db
+
+# Local session artifacts and the large runtime blob (CI builds it)
+.zcode/
+app/src/main/assets/runtime/rootfs.bin

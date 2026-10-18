@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Harness" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/brand_primary</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorSecondary">@color/brand_accent</item>
+        <item name="android:statusBarColor">@color/surface_dark</item>
+        <item name="android:navigationBarColor">@color/surface_dark</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+
+    <style name="Theme.Harness.Overlay" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimAmount">0.65</item>
+    </style>
+
+    <style name="TextAppearance.Harness.Status" parent="TextAppearance.Material3.BodyMedium">
+        <item name="android:textColor">@color/text_on_dark</item>
+    </style>
+
+    <style name="Widget.Harness.Button" parent="Widget.Material3.Button">
+        <item name="android:textAllCaps">false</item>
+    </style>
+</resources>
