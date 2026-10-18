@@ -282,8 +282,9 @@ class MainActivity : AppCompatActivity() {
                 showOverlay()
                 binding.status.setText(R.string.engine_installing)
                 binding.progress.isIndeterminate = false
-                binding.progress.progress = (state.progress * 100).toInt()
-                binding.detail.text = state.detail
+                val percent = (state.progress * 100).toInt()
+                binding.progress.progress = percent
+                binding.detail.text = "$percent% · ${state.detail}"
                 binding.detail.visibility = View.VISIBLE
                 binding.overlayActions.visibility = View.GONE
             }
