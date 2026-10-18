@@ -86,7 +86,11 @@ R="$OUT/stage/rootfs"
 cp "$ROOT/runtime/install-rootfs.sh" "$R/root/install-rootfs.sh"
 chmod +x "$R/root/install-rootfs.sh"
 rm -f "$R/etc/resolv.conf"
-cp /etc/resolv.conf "$R/etc/resolv.conf"
+{
+    cat /etc/resolv.conf 2>/dev/null || true
+    echo "nameserver 1.1.1.1"
+    echo "nameserver 8.8.8.8"
+} > "$R/etc/resolv.conf"
 
 installed=0
 
@@ -97,6 +101,10 @@ if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
     echo "    using docker (debian:$DEBIAN_TAG) chroot"
     if docker run --rm --privileged --platform linux/arm64         -v "$R:/rootfs" -e DSH_VERSION="$DSH_VERSION" debian:$DEBIAN_TAG bash -c '
           mkdir -p /rootfs/proc /rootfs/dev /rootfs/sys
+          cp /etc/resolv.conf /rootfs/etc/resolv.conf
+          printf "nameserver 1.1.1.1
+nameserver 8.8.8.8
+" >> /rootfs/etc/resolv.conf
           mount -t proc proc /rootfs/proc 2>/dev/null || true
           mount --bind /dev /rootfs/dev 2>/dev/null || true
           mount --bind /sys /rootfs/sys 2>/dev/null || true
