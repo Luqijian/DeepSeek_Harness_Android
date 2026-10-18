@@ -85,19 +85,38 @@ echo "==> 5/7 Install @deepseek-ai/dsh@$DSH_VERSION and dedupe nested zod copies
 R="$OUT/stage/rootfs"
 cp "$ROOT/runtime/install-rootfs.sh" "$R/root/install-rootfs.sh"
 chmod +x "$R/root/install-rootfs.sh"
+rm -f "$R/etc/resolv.conf"
+cp /etc/resolv.conf "$R/etc/resolv.conf"
 
-install_env=(
-  /usr/bin/env -i
-  PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-  TMPDIR=/tmp HOME=/root DSH_VERSION="$DSH_VERSION"
-  /bin/bash /root/install-rootfs.sh
-)
+installed=0
 
-if chroot "$R" /bin/true >/dev/null 2>&1; then
-    echo "    using chroot"
-    chroot "$R" "${install_env[@]}"
-else
-    echo "    chroot unavailable (GitHub runner); using host proot"
+# GitHub-hosted arm64 VMs deny chroot and ship a proot that segfaults on
+# glibc 2.41. Docker is available on the runner, so prefer a privileged
+# Debian container that chroots into the staged rootfs.
+if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+    echo "    using docker (debian:$DEBIAN_TAG) chroot"
+    if docker run --rm --privileged --platform linux/arm64         -v "$R:/rootfs" -e DSH_VERSION="$DSH_VERSION" debian:$DEBIAN_TAG bash -c '
+          mkdir -p /rootfs/proc /rootfs/dev /rootfs/sys
+          mount -t proc proc /rootfs/proc 2>/dev/null || true
+          mount --bind /dev /rootfs/dev 2>/dev/null || true
+          mount --bind /sys /rootfs/sys 2>/dev/null || true
+          chroot /rootfs /usr/bin/env -i             PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin             TMPDIR=/tmp HOME=/root DSH_VERSION="$DSH_VERSION"             /bin/bash /root/install-rootfs.sh
+        '; then
+        installed=1
+    else
+        echo "    docker install failed; trying chroot"
+    fi
+fi
+
+if [ "$installed" -eq 0 ] && chroot "$R" /bin/true >/dev/null 2>&1; then
+    echo "    using host chroot"
+    if chroot "$R" /usr/bin/env -i         PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin         TMPDIR=/tmp HOME=/root DSH_VERSION="$DSH_VERSION"         /bin/bash /root/install-rootfs.sh; then
+        installed=1
+    fi
+fi
+
+if [ "$installed" -eq 0 ]; then
+    echo "    falling back to host proot"
     if ! command -v proot >/dev/null 2>&1; then
         if [ "$(id -u)" -eq 0 ]; then
             apt-get update -qq && apt-get install -yqq proot
@@ -105,7 +124,7 @@ else
             sudo apt-get update -qq && sudo apt-get install -yqq proot
         fi
     fi
-    PROOT_NO_SECCOMP=1 proot -0 -r "$R" -b /dev -b /proc -b /sys -b /etc/resolv.conf -w /root "${install_env[@]}"
+    PROOT_NO_SECCOMP=1 proot -0 -r "$R" -b /dev -b /proc -b /sys -w /root         /usr/bin/env -i         PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin         TMPDIR=/tmp HOME=/root DSH_VERSION="$DSH_VERSION"         /bin/bash /root/install-rootfs.sh
 fi
 
 echo "==> 6/7 Clean caches and package rootfs"
