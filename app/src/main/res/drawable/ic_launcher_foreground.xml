@@ -4,23 +4,27 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <group
-        android:scaleX="0.72"
-        android:scaleY="0.72"
-        android:translateX="15"
-        android:translateY="15">
-        <path
-            android:pathData="M24,28 L52,54 L24,80"
-            android:strokeColor="#14B8A6"
-            android:strokeLineCap="round"
-            android:strokeLineJoin="round"
-            android:strokeWidth="9"
-            android:fillColor="#00000000" />
-        <path
-            android:pathData="M58,80 L84,80"
-            android:strokeColor="#5EEAD4"
-            android:strokeLineCap="round"
-            android:strokeWidth="9"
-            android:fillColor="#00000000" />
-    </group>
+    <!-- Abstract H whose crossbar is a wave; the teal spark keeps the DeepSeek-like
+         deep-blue/ocean feel without copying the official whale mark. -->
+    <path
+        android:pathData="M38,30 L38,78"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="8"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+    <path
+        android:pathData="M70,30 L70,78"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="8"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+    <path
+        android:pathData="M38,54 C48,42 60,66 70,54"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="8"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+    <path
+        android:pathData="M82,25 a5,5 0 1,0 0,10 a5,5 0 1,0 0,-10"
+        android:fillColor="#FF5EEAD4" />
 </vector>
