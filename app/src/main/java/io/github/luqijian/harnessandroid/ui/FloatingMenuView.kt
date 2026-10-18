@@ -35,21 +35,17 @@ class FloatingMenuView @JvmOverloads constructor(
     private val prefs = context.getSharedPreferences("float_ball", Context.MODE_PRIVATE)
 
     private val ballRadius = dp(26f)
-    private val itemRadius = dp(22f)
+    private val itemRadius = ballRadius
     private val itemGap = dp(12f)
     private val slop = dp(8f)
-    private val columnsWidth = ballRadius * 2
-    private val columnsHeight = ballRadius * 2 + itemGap +
-        3 * (itemRadius * 2) + 2 * itemGap + itemGap
+    private val pad = dp(2f)
+    private val columnsWidth = ballRadius * 2 + pad * 2
+    private val columnsHeight = ballRadius * 2 + pad * 2 + itemGap +
+        3 * (itemRadius * 2) + 2 * itemGap
 
     private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
-        color = 0xE6111C2E.toInt()
-    }
-    private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeWidth = dp(1.2f)
-        color = 0xFF14B8A6.toInt()
+        color = 0xF2111C2E.toInt()
     }
     private val iconPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
@@ -143,7 +139,7 @@ class FloatingMenuView @JvmOverloads constructor(
     }
 
     private fun localBallCenterY(): Float =
-        if (menuAbove) height - ballRadius else ballRadius
+        if (menuAbove) height - ballRadius - pad else ballRadius + pad
 
     private fun localBallCenterX(): Float = width / 2f
 
@@ -195,15 +191,13 @@ class FloatingMenuView @JvmOverloads constructor(
                 val (x, y) = centers[index]
                 itemFillPaint.alpha = 245
                 canvas.drawCircle(x, y, itemRadius, itemFillPaint)
-                icons[index]?.let { drawIcon(canvas, it, x, y, itemRadius - dp(11f)) }
+                icons[index]?.let { drawIcon(canvas, it, x, y, itemRadius * 0.82f) }
             }
         }
 
         fillPaint.alpha = alpha
-        strokePaint.alpha = alpha
         iconPaint.alpha = alpha
         canvas.drawCircle(cx, cy, ballRadius, fillPaint)
-        canvas.drawCircle(cx, cy, ballRadius, strokePaint)
 
         if (expanded) {
             val r = ballRadius * 0.38f

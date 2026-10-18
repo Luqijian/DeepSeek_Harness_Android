@@ -95,7 +95,7 @@
 
         <io.github.luqijian.harnessandroid.ui.FloatingMenuView
             android:id="@+id/float_menu"
-            android:layout_width="52dp"
-            android:layout_height="220dp" />
+            android:layout_width="56dp"
+            android:layout_height="248dp" />
     </FrameLayout>
 </LinearLayout>
