@@ -19,6 +19,7 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.webkit.URLUtil
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
@@ -45,6 +46,7 @@ class MainActivity : AppCompatActivity() {
     private var lastLoadedUrl: String? = null
     private var pendingFileCallback: ValueCallback<Array<Uri>>? = null
     private var pendingPermissionRequest: PermissionRequest? = null
+    private var authDialog: android.app.Dialog? = null
 
     private val notificationPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -171,11 +173,12 @@ class MainActivity : AppCompatActivity() {
                 allowContentAccess = false
                 mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
                 mediaPlaybackRequiresUserGesture = true
-                setSupportMultipleWindows(false)
+                setSupportMultipleWindows(true)
                 useWideViewPort = true
                 loadWithOverviewMode = false
                 textZoom = 100
             }
+            android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(
                     view: WebView,
@@ -205,6 +208,19 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             webChromeClient = object : WebChromeClient() {
+                override fun onCreateWindow(
+                    view: WebView,
+                    isDialog: Boolean,
+                    isUserGesture: Boolean,
+                    resultMsg: android.os.Message,
+                ): Boolean {
+                    val transport = resultMsg.obj as? WebView.WebViewTransport ?: return false
+                    LogStore.append("webview", "popup requested")
+                    showAuthPopup(transport)
+                    resultMsg.sendToTarget()
+                    return true
+                }
+
                 override fun onShowFileChooser(
                     webView: WebView,
                     filePathCallback: ValueCallback<Array<Uri>>,
@@ -335,7 +351,83 @@ class MainActivity : AppCompatActivity() {
         binding.overlay.visibility = View.GONE
     }
 
-    private fun openSettings() {
-        startActivity(Intent(this, SettingsActivity::class.java))
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun showAuthPopup(transport: WebView.WebViewTransport) {
+        authDialog?.dismiss()
+        val popup = WebView(this)
+        popup.setBackgroundColor(android.graphics.Color.WHITE)
+        popup.settings.apply {
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            databaseEnabled = true
+            allowFileAccess = false
+            allowContentAccess = false
+            mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+            mediaPlaybackRequiresUserGesture = true
+            useWideViewPort = true
+            loadWithOverviewMode = false
+        }
+        android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(popup, true)
+        popup.webViewClient = object : WebViewClient() {
+            override fun shouldOverrideUrlLoading(
+                view: WebView,
+                request: WebResourceRequest,
+            ): Boolean {
+                val scheme = request.url.scheme ?: return false
+                if (scheme == "http" || scheme == "https") return false
+                runCatching { startActivity(Intent(Intent.ACTION_VIEW, request.url)) }
+                return true
+            }
+        }
+        popup.webChromeClient = object : WebChromeClient() {
+            override fun onCloseWindow(window: WebView) {
+                authDialog?.dismiss()
+            }
+        }
+
+        val close = TextView(this).apply {
+            text = getString(R.string.cancel)
+            setTextColor(android.graphics.Color.WHITE)
+            setBackgroundColor(0xFF111C2E.toInt())
+            gravity = android.view.Gravity.CENTER
+            setOnClickListener { authDialog?.dismiss() }
+        }
+        val container = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setBackgroundColor(android.graphics.Color.WHITE)
+            addView(
+                close,
+                android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    (48 * resources.displayMetrics.density).toInt(),
+                ),
+            )
+            addView(
+                popup,
+                android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    0,
+                    1f,
+                ),
+            )
+        }
+        val dialog = android.app.Dialog(this, android.R.style.Theme_DeviceDefault_Light_NoActionBar)
+        dialog.setContentView(container)
+        dialog.window?.setLayout(
+            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+        )
+        dialog.window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.WHITE))
+        dialog.setOnDismissListener {
+            authDialog = null
+            runCatching { popup.destroy() }
+        }
+        authDialog = dialog
+        transport.webView = popup
+        dialog.show()
+        LogStore.append("webview", "auth popup shown")
+    }
+
+    private fun openSettings() {        startActivity(Intent(this, SettingsActivity::class.java))
     }
 }
