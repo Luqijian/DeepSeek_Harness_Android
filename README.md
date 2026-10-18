@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/logo.svg" width="80" alt="Harness Android logo" />
+<img src="docs/logo.png" width="80" alt="Harness Android logo" />
 
 # Harness Android
 
