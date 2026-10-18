@@ -23,6 +23,7 @@ data class RuntimeManifest(
     val version: String = BuildConfig.RUNTIME_VERSION,
     val dshVersion: String = BuildConfig.DSH_VERSION,
     val sha256: String = "",
+    val size: Long = 0L,
     val installedSize: Long = 0L,
 )
 
@@ -53,9 +54,14 @@ object RuntimeInstaller {
             )
         }
 
-        val assetSize = runCatching {
-            context.assets.openFd(ASSET_ROOTFS).use { it.length }
-        }.getOrDefault(-1L)
+        // openFd only works for uncompressed assets; the runtime blob is stored
+        // compressed, so fall back to the size recorded in manifest.json.
+        val assetSize = maxOf(
+            manifest.size,
+            runCatching {
+                context.assets.openFd(ASSET_ROOTFS).use { it.length }
+            }.getOrDefault(0L),
+        )
 
         val tmp = File(AppPaths.runtimeRoot(context), "extract-${System.currentTimeMillis()}")
         if (tmp.exists()) tmp.deleteRecursively()
@@ -176,6 +182,7 @@ object RuntimeInstaller {
                 version = obj.optString("version", fallbackVersion),
                 dshVersion = obj.optString("dshVersion", BuildConfig.DSH_VERSION),
                 sha256 = obj.optString("sha256", ""),
+                size = obj.optLong("size", 0L),
                 installedSize = obj.optLong("installedSize", 0L),
             )
         }.getOrElse {

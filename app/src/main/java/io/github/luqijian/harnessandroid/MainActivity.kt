@@ -85,32 +85,10 @@ class MainActivity : AppCompatActivity() {
 
         WindowCompat.setDecorFitsSystemWindows(window, false)
         applyInsets()
-        setupToolbar()
+        setupFloatMenu()
         setupWebView()
         binding.retry.setOnClickListener { EngineService.restart(this) }
         binding.openSettings.setOnClickListener { openSettings() }
-
-        binding.toolbar.inflateMenu(R.menu.main)
-        binding.toolbar.setOnMenuItemClickListener { item ->
-            when (item.itemId) {
-                R.id.action_workspace -> {
-                    WorkspaceActions.choose(this)
-                    true
-                }
-
-                R.id.action_reload -> {
-                    binding.webView.reload()
-                    true
-                }
-
-                R.id.action_settings -> {
-                    openSettings()
-                    true
-                }
-
-                else -> false
-            }
-        }
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -167,8 +145,17 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun setupToolbar() {
-        binding.toolbar.subtitle = getString(R.string.engine_starting)
+    private fun setupFloatMenu() {
+        binding.floatMenu.onAction = { action ->
+            when (action) {
+                io.github.luqijian.harnessandroid.ui.FloatingMenuView.Action.WORKSPACE ->
+                    WorkspaceActions.choose(this)
+                io.github.luqijian.harnessandroid.ui.FloatingMenuView.Action.RELOAD ->
+                    binding.webView.reload()
+                io.github.luqijian.harnessandroid.ui.FloatingMenuView.Action.SETTINGS ->
+                    openSettings()
+            }
+        }
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -299,7 +286,7 @@ class MainActivity : AppCompatActivity() {
                 binding.detail.text = state.detail
                 binding.detail.visibility = View.VISIBLE
                 binding.overlayActions.visibility = View.GONE
-                binding.toolbar.subtitle = getString(R.string.engine_installing)
+                binding.floatMenu.setStatus(R.color.text_muted)
             }
 
             is EngineState.Starting -> {
@@ -309,12 +296,12 @@ class MainActivity : AppCompatActivity() {
                 binding.detail.text = state.detail
                 binding.detail.visibility = if (state.detail.isBlank()) View.GONE else View.VISIBLE
                 binding.overlayActions.visibility = View.GONE
-                binding.toolbar.subtitle = getString(R.string.engine_starting)
+                binding.floatMenu.setStatus(R.color.text_muted)
             }
 
             is EngineState.Ready -> {
                 hideOverlay()
-                binding.toolbar.subtitle = getString(R.string.engine_ready)
+                binding.floatMenu.setStatus(R.color.status_ok)
                 if (lastLoadedUrl != state.url) {
                     lastLoadedUrl = state.url
                     binding.webView.loadUrl(state.url)
@@ -329,7 +316,7 @@ class MainActivity : AppCompatActivity() {
                 binding.detail.text = state.detail
                 binding.detail.visibility = if (state.detail.isNullOrBlank()) View.GONE else View.VISIBLE
                 binding.overlayActions.visibility = View.VISIBLE
-                binding.toolbar.subtitle = getString(R.string.engine_error)
+                binding.floatMenu.setStatus(R.color.status_error)
             }
 
             EngineState.Stopped, EngineState.Idle -> {
@@ -339,7 +326,7 @@ class MainActivity : AppCompatActivity() {
                 binding.progress.progress = 0
                 binding.detail.visibility = View.GONE
                 binding.overlayActions.visibility = View.VISIBLE
-                binding.toolbar.subtitle = getString(R.string.engine_stopped)
+                binding.floatMenu.setStatus(R.color.status_error)
             }
         }
     }
