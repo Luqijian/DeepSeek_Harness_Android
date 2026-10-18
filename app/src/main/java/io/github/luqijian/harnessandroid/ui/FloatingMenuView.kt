@@ -7,6 +7,7 @@ import android.graphics.drawable.GradientDrawable
 import android.util.AttributeSet
 import android.view.Gravity
 import android.view.MotionEvent
+import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -14,8 +15,9 @@ import io.github.luqijian.harnessandroid.R
 
 /**
  * Draggable floating ball with an expandable action menu.
- * Releasing the ball near a horizontal edge docks it to that edge (semi-hidden);
- * tapping a docked ball undocks it. Tapping (without dragging) toggles the menu.
+ * The ball shows a plus icon; when the menu is open it becomes a collapse (X) button.
+ * Releasing the ball near a horizontal edge docks it: the ball shrinks to a
+ * translucent half-sphere attached to the edge. Tapping a docked ball undocks it.
  */
 class FloatingMenuView @JvmOverloads constructor(
     context: Context,
@@ -29,9 +31,7 @@ class FloatingMenuView @JvmOverloads constructor(
     private val ballSize = dp(52)
     private val itemSize = dp(44)
     private val ball: ImageView
-    private val statusDot: ImageView
     private val menuColumn: LinearLayout
-    private val items = mutableMapOf<Action, ImageView>()
     private var expanded = false
 
     private var downX = 0f
@@ -40,8 +40,10 @@ class FloatingMenuView @JvmOverloads constructor(
     private var lastY = 0f
     private var dragged = false
     private var dockedSide = 0 // 0 = free, -1 = left, 1 = right
+    private var normalized = false
 
     init {
+        isClickable = true
         clipChildren = false
         clipToPadding = false
 
@@ -69,7 +71,6 @@ class FloatingMenuView @JvmOverloads constructor(
                     onAction?.invoke(action)
                 }
             }
-            items[action] = view
             menuColumn.addView(view)
         }
         addView(
@@ -77,16 +78,8 @@ class FloatingMenuView @JvmOverloads constructor(
             LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL),
         )
 
-        statusDot = ImageView(context).apply {
-            background = circle(0xFF34D399.toInt())
-            layoutParams = LayoutParams(dp(13), dp(13), Gravity.TOP or Gravity.END).apply {
-                topMargin = dp(2)
-                rightMargin = dp(2)
-            }
-        }
-
         ball = ImageView(context).apply {
-            setImageResource(R.drawable.ic_notification)
+            setImageResource(R.drawable.ic_plus)
             imageTintList = android.content.res.ColorStateList.valueOf(Color.WHITE)
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
@@ -96,30 +89,31 @@ class FloatingMenuView @JvmOverloads constructor(
             val pad = dp(14)
             setPadding(pad, pad, pad, pad)
         }
-
-        addView(statusDot)
         addView(
             ball,
             LayoutParams(ballSize, ballSize, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL),
         )
     }
 
-    @SuppressLint("ClickableViewAccessibility")
-    override fun onInterceptTouchEvent(event: MotionEvent): Boolean {
-        if (event.actionMasked == MotionEvent.ACTION_DOWN) {
-            downX = event.rawX
-            downY = event.rawY
-            lastX = downX
-            lastY = downY
-            dragged = false
+    /** Replace layout_gravity positioning with explicit margins so dragging is stable. */
+    private fun normalizePosition() {
+        if (normalized) return
+        val parent = parent as? ViewGroup ?: return
+        val lp = layoutParams as MarginLayoutParams
+        if (lp is LayoutParams) lp.gravity = Gravity.NO_GRAVITY
+        if (lp.leftMargin <= 0 && lp.rightMargin > 0 && lp.leftMargin >= 0) {
+            lp.leftMargin = parent.width - width - lp.rightMargin
         }
-        return false
+        lp.rightMargin = 0
+        normalized = true
+        layoutParams = lp
     }
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                normalizePosition()
                 downX = event.rawX
                 downY = event.rawY
                 lastX = downX
@@ -142,8 +136,6 @@ class FloatingMenuView @JvmOverloads constructor(
                 }
                 if (dragged) {
                     moveBy(dx, dy)
-                    dockedSide = 0
-                    ball.alpha = 1f
                 }
                 return true
             }
@@ -166,26 +158,31 @@ class FloatingMenuView @JvmOverloads constructor(
     }
 
     private fun moveBy(dx: Float, dy: Float) {
+        val parent = parent as? ViewGroup ?: return
         val lp = layoutParams as MarginLayoutParams
-        val parentWidth = (parent as? android.view.ViewGroup)?.width ?: return
-        val parentHeight = (parent as? android.view.ViewGroup)?.height ?: return
-        lp.leftMargin = (lp.leftMargin + dx.toInt()).coerceIn(0, parentWidth - width)
-        lp.bottomMargin = (lp.bottomMargin - dy.toInt()).coerceIn(dp(24), parentHeight - height)
+        val half = width / 2
+        lp.leftMargin = (lp.leftMargin + dx.toInt()).coerceIn(-half, parent.width - half)
+        lp.bottomMargin = (lp.bottomMargin - dy.toInt()).coerceIn(dp(24), parent.height - height)
+        dockedSide = 0
+        ball.alpha = 1f
         layoutParams = lp
     }
 
     private fun snapToEdge() {
-        val parent = parent as? android.view.ViewGroup ?: return
+        val parent = parent as? ViewGroup ?: return
         val lp = layoutParams as MarginLayoutParams
         val centerX = lp.leftMargin + width / 2
         dockedSide = if (centerX < parent.width / 2) -1 else 1
-        lp.leftMargin = if (dockedSide < 0) -width / 2 else parent.width - width / 2
-        ball.alpha = 0.72f
+        lp.leftMargin = if (dockedSide < 0) -(width - halfVisible()) else parent.width - halfVisible()
+        ball.alpha = 0.45f
         layoutParams = lp
     }
 
+    /** Pixels of the ball that stay visible when docked (a bit less than half). */
+    private fun halfVisible(): Int = width / 2 - dp(4)
+
     private fun undock() {
-        val parent = parent as? android.view.ViewGroup ?: return
+        val parent = parent as? ViewGroup ?: return
         val lp = layoutParams as MarginLayoutParams
         lp.leftMargin = if (dockedSide < 0) dp(12) else parent.width - width - dp(12)
         dockedSide = 0
@@ -199,19 +196,15 @@ class FloatingMenuView @JvmOverloads constructor(
 
     private fun expand() {
         expanded = true
+        ball.setImageResource(R.drawable.ic_close)
         menuColumn.visibility = VISIBLE
-        menuColumn.animate().alpha(1f).setDuration(120).start()
     }
 
     private fun collapse() {
+        if (!expanded) return
         expanded = false
+        ball.setImageResource(R.drawable.ic_plus)
         menuColumn.visibility = GONE
-    }
-
-    fun setStatus(@androidx.annotation.ColorRes color: Int) {
-        statusDot.background = circle(
-            androidx.core.content.ContextCompat.getColor(context, color),
-        )
     }
 
     private fun circle(color: Int): GradientDrawable = GradientDrawable().apply {

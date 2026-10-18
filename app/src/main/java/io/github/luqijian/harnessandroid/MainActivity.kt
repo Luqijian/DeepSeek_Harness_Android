@@ -286,7 +286,6 @@ class MainActivity : AppCompatActivity() {
                 binding.detail.text = state.detail
                 binding.detail.visibility = View.VISIBLE
                 binding.overlayActions.visibility = View.GONE
-                binding.floatMenu.setStatus(R.color.text_muted)
             }
 
             is EngineState.Starting -> {
@@ -296,12 +295,10 @@ class MainActivity : AppCompatActivity() {
                 binding.detail.text = state.detail
                 binding.detail.visibility = if (state.detail.isBlank()) View.GONE else View.VISIBLE
                 binding.overlayActions.visibility = View.GONE
-                binding.floatMenu.setStatus(R.color.text_muted)
             }
 
             is EngineState.Ready -> {
                 hideOverlay()
-                binding.floatMenu.setStatus(R.color.status_ok)
                 if (lastLoadedUrl != state.url) {
                     lastLoadedUrl = state.url
                     binding.webView.loadUrl(state.url)
@@ -316,7 +313,6 @@ class MainActivity : AppCompatActivity() {
                 binding.detail.text = state.detail
                 binding.detail.visibility = if (state.detail.isNullOrBlank()) View.GONE else View.VISIBLE
                 binding.overlayActions.visibility = View.VISIBLE
-                binding.floatMenu.setStatus(R.color.status_error)
             }
 
             EngineState.Stopped, EngineState.Idle -> {
@@ -326,7 +322,6 @@ class MainActivity : AppCompatActivity() {
                 binding.progress.progress = 0
                 binding.detail.visibility = View.GONE
                 binding.overlayActions.visibility = View.VISIBLE
-                binding.floatMenu.setStatus(R.color.status_error)
             }
         }
     }
